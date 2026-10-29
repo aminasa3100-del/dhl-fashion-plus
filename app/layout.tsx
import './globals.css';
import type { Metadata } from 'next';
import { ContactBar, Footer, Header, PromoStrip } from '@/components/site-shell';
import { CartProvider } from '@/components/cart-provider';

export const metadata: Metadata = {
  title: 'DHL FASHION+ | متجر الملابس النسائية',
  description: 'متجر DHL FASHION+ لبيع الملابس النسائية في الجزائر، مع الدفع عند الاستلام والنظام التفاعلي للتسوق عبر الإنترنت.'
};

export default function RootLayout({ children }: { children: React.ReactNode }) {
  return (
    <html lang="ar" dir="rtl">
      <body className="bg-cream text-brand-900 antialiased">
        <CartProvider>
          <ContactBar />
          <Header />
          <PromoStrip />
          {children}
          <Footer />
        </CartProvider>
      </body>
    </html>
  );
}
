@@ -1,0 +1,161 @@
+"use client";
+
+import { useMemo, useState } from 'react';
+import { useCart } from '@/components/cart-provider';
+import { deliveryZones } from '@/lib/data';
+
+const initialForm = {
+  firstName: '',
+  lastName: '',
+  phone: '',
+  wilaya: '',
+  commune: '',
+  address: '',
+  deliveryMethod: 'home'
+};
+
+export default function CheckoutPage() {
+  const { items, subtotal, total, clear } = useCart();
+  const [form, setForm] = useState(initialForm);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const deliveryFee = useMemo(() => {
+    if (items.length === 0) return 0;
+    if (subtotal >= 15000) return 0;
+
+    const zone = deliveryZones.find(
+      (entry) =>
+        entry.wilaya === form.wilaya &&
+        (entry.commune === form.commune || form.commune === '')
+    );
+
+    return zone ? zone.price : 700;
+  }, [form.commune, form.wilaya, items.length, subtotal]);
+
+  const finalTotal = subtotal + deliveryFee;
+
+  const handleChange = (field: keyof typeof initialForm, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (items.length === 0) {
+      setError('السلة فارغة، أضف منتجات قبل تأكيد الطلب.');
+      return;
+    }
+
+    if (!form.firstName || !form.lastName || !form.phone || !form.wilaya || !form.commune || !form.address) {
+      setError('يرجى تعبئة جميع الحقول المطلوبة.');
+      return;
+    }
+
+    if (!deliveryFee) {
+      setError('يجب تحديد سعر التوصيل قبل تأكيد الطلب.');
+      return;
+    }
+
+    const order = {
+      id: `DHL-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      customer: form,
+      total: finalTotal,
+      deliveryFee,
+      items
+    };
+
+    const previousOrders = JSON.parse(localStorage.getItem('dhl-orders') || '[]');
+    localStorage.setItem('dhl-orders', JSON.stringify([...previousOrders, order]));
+
+    clear();
+    setSuccess('تم تسجيل الطلب بنجاح، وسيتم التواصل معك لتأكيد تفاصيل التوصيل.');
+    setError('');
+    setForm(initialForm);
+  };
+
+  return (
+    <main className="container-shell py-10">
+      <h1 className="mb-8 text-3xl font-black text-brand-800">نموذج الطلب</h1>
+      <form onSubmit={handleSubmit} className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-5 rounded-3xl border border-stone-200 bg-white p-5 shadow-soft">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <input
+              value={form.firstName}
+              onChange={(event) => handleChange('firstName', event.target.value)}
+              className="rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-right"
+              placeholder="الاسم"
+            />
+            <input
+              value={form.lastName}
+              onChange={(event) => handleChange('lastName', event.target.value)}
+              className="rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-right"
+              placeholder="اللقب"
+            />
+          </div>
+
+          <input
+            value={form.phone}
+            onChange={(event) => handleChange('phone', event.target.value)}
+            className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-right"
+            placeholder="الهاتف"
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <select
+              value={form.wilaya}
+              onChange={(event) => handleChange('wilaya', event.target.value)}
+              className="rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-right"
+            >
+              <option value="">اختر الولاية</option>
+              {['سطيف', 'الجزائر العاصمة', 'وهران', 'تبسة', 'الطارف', 'سكيكدة', 'باتنة'].map((wilaya) => (
+                <option key={wilaya} value={wilaya}>{wilaya}</option>
+              ))}
+            </select>
+            <select
+              value={form.commune}
+              onChange={(event) => handleChange('commune', event.target.value)}
+              className="rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-right"
+            >
+              <option value="">اختر البلدية</option>
+              {['سطيف', 'عين أرنب', 'برحال', 'بني خلاد', 'الجزائر العاصمة', 'وهران', 'تبسة', 'الطارف', 'سكيكدة', 'باتنة'].map((commune) => (
+                <option key={commune} value={commune}>{commune}</option>
+              ))}
+            </select>
+          </div>
+
+          <textarea
+            value={form.address}
+            onChange={(event) => handleChange('address', event.target.value)}
+            className="min-h-[120px] w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-right"
+            placeholder="العنوان التفصيلي"
+          />
+
+          <select
+            value={form.deliveryMethod}
+            onChange={(event) => handleChange('deliveryMethod', event.target.value)}
+            className="w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-right"
+          >
+            <option value="home">توصيل إلى المنزل</option>
+            <option value="pickup">استلام من المتجر</option>
+          </select>
+
+          {error ? <p className="rounded-2xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+          {success ? <p className="rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</p> : null}
+        </div>
+
+        <aside className="rounded-3xl border border-stone-200 bg-white p-5 shadow-soft">
+          <h2 className="mb-4 text-2xl font-black text-brand-800">ملخص الطلب</h2>
+          <div className="space-y-3 text-sm text-stone-600">
+            <div className="flex items-center justify-between"><span>المجموع</span><span>{subtotal.toLocaleString()} دج</span></div>
+            <div className="flex items-center justify-between"><span>التوصيل</span><span>{deliveryFee === 0 ? 'مجاني' : `${deliveryFee.toLocaleString()} دج`}</span></div>
+            <div className="flex items-center justify-between border-t border-stone-200 pt-3 text-lg font-black text-brand-800"><span>الإجمالي</span><span>{finalTotal.toLocaleString()} دج</span></div>
+          </div>
+          <button type="submit" className="mt-6 w-full rounded-full bg-brand-700 px-5 py-3 text-sm font-bold text-white">تأكيد الطلب</button>
+          <p className="mt-3 text-xs text-stone-500">يتم التحقق من المخزون والأسعار قبل تأكيد الطلب في النسخة المتصلة بـ Supabase.</p>
+        </aside>
+      </form>
+    </main>
+  );
+}
